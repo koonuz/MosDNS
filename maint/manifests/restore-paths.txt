@@ -3,5 +3,7 @@ README.md
 maint
 mosdns/patches/000-add-query_set-domain-set-plugin.patch
 mosdns/patches/900-fix-negative-response-soa.patch
+mosdns/patches/901-fix-transport-keep-early-reply.patch
+mosdns/patches/902-fix-cache-dump-stored-time.patch
 luci-app-mosdns/root/etc/mosdns/rule/cloudflare-cidr.txt
 luci-app-mosdns/root/etc/mosdns/rule/local-ptr.txt

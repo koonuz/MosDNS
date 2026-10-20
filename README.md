@@ -15,6 +15,10 @@
    > **用法**: `- exec: $tag` 记录当前请求域名，`- matches: qname $tag` 直接当域名集合用（精确匹配，不含子域）
 6. 修复空响应 SOA owner，并按 RFC 2308 为 `reject 0` / `reject 3` 添加 300 秒负缓存 SOA；错误类返回码保持原行为
    > **Patch**: `mosdns/patches/900-fix-negative-response-soa.patch`
+7. 修复上游极快回包（如本机 mihomo）被丢弃导致的 1 秒解析卡顿
+   > **Patch**: `mosdns/patches/901-fix-transport-keep-early-reply.patch`
+8. 修复缓存 dump 未保存写入时间，重启后恢复条目 TTL 恒为 1 的问题
+   > **Patch**: `mosdns/patches/902-fix-cache-dump-stored-time.patch`
 
 ### 🙏 致谢
 

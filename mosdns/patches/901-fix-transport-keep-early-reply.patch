@@ -1,0 +1,33 @@
+From c30637413a356251844292add58d4f1c1bd69306 Mon Sep 17 00:00:00 2001
+From: vitoegg <vitoegg@gmail.com>
+Date: Tue, 20 Oct 2026 12:00:00 +0800
+Subject: [PATCH] fix transport: keep a reply that arrives before the wait
+
+The read loop hands a reply to the waiting query with a non-blocking
+send, assuming the query channel has a buffer, but the channel was
+created unbuffered. A fast upstream, like a local resolver on the
+loopback, can answer before the query reaches its select. The reply is
+then dropped, and the query stalls until the next UDP resend one second
+later, or until the query timeout over TCP.
+
+Give the channel the buffer of one that the read loop expects. Each
+query id has its own channel, so the buffer only ever holds its reply.
+
+Signed-off-by: vitoegg <vitoegg@gmail.com>
+---
+ pkg/upstream/transport/conn_traditional.go | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pkg/upstream/transport/conn_traditional.go b/pkg/upstream/transport/conn_traditional.go
+index 6f06524..335be95 100644
+--- a/pkg/upstream/transport/conn_traditional.go
++++ b/pkg/upstream/transport/conn_traditional.go
+@@ -244,7 +244,7 @@ func (dc *TraditionalDnsConn) queueLen() int {
+ // It returns a nil c if queue has too many queries.
+ // Caller must call deleteQueueC to release the qid in queue.
+ func (dc *TraditionalDnsConn) addQueueC() (qid uint16, c chan *[]byte) {
+-	c = make(chan *[]byte)
++	c = make(chan *[]byte, 1)
+ 	dc.queueMu.Lock()
+ 	for i := 0; i < 100; i++ {
+ 		qid = dc.nextQid

@@ -1,0 +1,31 @@
+From c87e6764ef702cd7433586df2509ee25a704768d Mon Sep 17 00:00:00 2001
+From: vitoegg <vitoegg@gmail.com>
+Date: Tue, 20 Oct 2026 12:00:00 +0800
+Subject: [PATCH] fix cache: dump the stored time of each entry
+
+readDump restores msg_stored_time, but writeDump never wrote it, so
+every entry loaded from a dump was stored at the Unix epoch. Subtracting
+the time since then from its TTLs left them all at 1 second until the
+entry was refreshed, which made clients query again for every restored
+entry after a restart.
+
+Write the stored time with each entry. Entries loaded from a dump of an
+older build still lack it, until they are refreshed from upstream.
+
+Signed-off-by: vitoegg <vitoegg@gmail.com>
+---
+ plugin/executable/cache/cache.go | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/plugin/executable/cache/cache.go b/plugin/executable/cache/cache.go
+index 63272ed..1d401e1 100644
+--- a/plugin/executable/cache/cache.go
++++ b/plugin/executable/cache/cache.go
+@@ -502,6 +502,7 @@ func (c *Cache) writeDump(w io.Writer) (int, error) {
+ 			Key:                 []byte(k),
+ 			CacheExpirationTime: cacheExpirationTime.Unix(),
+ 			MsgExpirationTime:   v.expirationTime.Unix(),
++			MsgStoredTime:       v.storedTime.Unix(),
+ 			Msg:                 msg,
+ 		}
+ 		block.Entries = append(block.Entries, e)
