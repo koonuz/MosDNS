@@ -1,154 +1,72 @@
-name: Sync Upstream
+name: Build MosDNS IPK (ImmortalWrt 24.10.6 MT7621)
 
 on:
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  actions: write
-
-concurrency:
-  group: openmosdns-master-writes
-  cancel-in-progress: false
-
-env:
-  UPSTREAM_REPO: sbwml/luci-app-mosdns
-  UPSTREAM_REF: v5
-  TARGET_BRANCH: master
+  workflow_dispatch: # 允许手动触发
 
 jobs:
-  sync:
-    name: Sync upstream and apply customizations
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      GH_TOKEN: ${{ github.token }}
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v4
 
-      - name: Sync upstream and apply customizations
-        id: sync
+      - name: Install system dependencies
         run: |
-          set -eu
-          . maint/scripts/workflow-writeback.sh
-          workflow_writeback_config_git
+          sudo apt-get update
+          # 必须安装 zstd 以解压 24.10 版本的 SDK
+          sudo apt-get install -y build-essential clang flex bison g++ gawk \
+          gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+          python3-distutils python3-setuptools rsync swig unzip zlib1g-dev file wget zstd
 
-          temp_dir="$(mktemp -d)"
-          upstream_dir="$temp_dir/upstream"
-          apply_log="$temp_dir/apply.log"
-          commit_message="$temp_dir/commit-message.txt"
-          customization_status="success"
-          commit_sha=""
-
-          cleanup() {
-            rm -rf "$temp_dir"
-          }
-
-          trap cleanup EXIT
-
-          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git" 2>/dev/null || \
-            git remote set-url upstream "https://github.com/${UPSTREAM_REPO}.git"
-          git fetch --no-tags upstream "${UPSTREAM_REF}"
-
-          upstream_sha="$(git rev-parse "upstream/${UPSTREAM_REF}")"
-          echo "upstream_sha=${upstream_sha}" >> "${GITHUB_OUTPUT}"
-
-          mkdir -p "$upstream_dir"
-          git archive "upstream/${UPSTREAM_REF}" | tar -x -C "$upstream_dir"
-
-          short_upstream_sha="$(printf '%s' "${upstream_sha}" | cut -c1-7)"
-          printf 'sync: upstream %s\n' "$short_upstream_sha" > "$commit_message"
-
-          previous_upstream_ref="$(
-            git log --first-parent --format='%s' |
-              sed -n 's/^sync: upstream \([0-9a-f]\{7\}\)$/\1/p' |
-              head -n 1
-          )"
-          if [ -n "$previous_upstream_ref" ] &&
-            previous_upstream_sha="$(git rev-parse --verify "${previous_upstream_ref}^{commit}" 2>/dev/null)" &&
-            git merge-base --is-ancestor "$previous_upstream_sha" "$upstream_sha"; then
-            upstream_titles="$(git log --reverse --format='- %s' "${previous_upstream_sha}..${upstream_sha}")"
-            if [ -n "$upstream_titles" ]; then
-              printf '\n%s\n' "$upstream_titles" >> "$commit_message"
-            fi
-          fi
-
-          if ! sh maint/scripts/apply-customizations.sh "$upstream_dir" >"$apply_log" 2>&1; then
-            customization_status="conflict"
-          fi
-
-          echo "customization_status=${customization_status}" >> "${GITHUB_OUTPUT}"
-
-          if [ "$customization_status" = "conflict" ]; then
-            cat "$apply_log" >&2
-            {
-              echo "## Upstream sync result"
-              echo
-              echo "- Status: conflict"
-              echo "- Upstream SHA: \`${upstream_sha}\`"
-              echo
-              echo "### Apply log"
-              echo '```text'
-              cat "$apply_log"
-              echo '```'
-            } >> "${GITHUB_STEP_SUMMARY}"
-            echo "CUSTOMIZATION_STATUS=conflict"
-            exit 1
-          fi
-
-          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-
-          cp -R "$upstream_dir"/. .
-
-          git add -A
-          if workflow_writeback_has_staged_changes; then
-            git commit -F "$commit_message"
-            commit_sha="$(workflow_writeback_head_sha)"
-          fi
-
-          if [ -z "$commit_sha" ]; then
-            {
-              echo "## Upstream sync result"
-              echo
-              echo "- Status: no changes"
-              echo "- Upstream SHA: \`${upstream_sha}\`"
-              echo "- Target branch: \`${TARGET_BRANCH}\`"
-            } >> "${GITHUB_STEP_SUMMARY}"
-            exit 0
-          fi
-
-          git push origin HEAD:${TARGET_BRANCH}
-
-          {
-            echo "## Upstream sync result"
-            echo
-            echo "- Status: pushed"
-            echo "- Upstream SHA: \`${upstream_sha}\`"
-            echo "- Target branch: \`${TARGET_BRANCH}\`"
-            echo "- Commit: \`${commit_sha}\`"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Summarize failed result
-        if: failure() && steps.sync.outputs.customization_status != 'conflict'
+      - name: Download ImmortalWrt 24.10.6 SDK for MT7621
         run: |
-          {
-            echo "## Upstream sync result"
-            echo
-            echo "- Status: failed"
-            echo "- Target branch: \`${TARGET_BRANCH}\`"
-          } >> "${GITHUB_STEP_SUMMARY}"
+          # 官方 24.10.6 MT7621 SDK 链接 (.tar.zst 格式)
+          SDK_URL="https://downloads.immortalwrt.org/releases/24.10.6/targets/ramips/mt7621/immortalwrt-sdk-24.10.6-ramips-mt7621_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+          wget -O sdk.tar.zst "$SDK_URL"
+          # 使用 zstd 解压
+          tar --use-compress-program=unzstd -xf sdk.tar.zst || tar --zstd -xf sdk.tar.zst
+          mv immortalwrt-sdk-* sdk
 
-      - name: Delete Workflow Runs
-        if: always()
-        uses: ophub/delete-releases-workflows@main
+      - name: Prepare Feeds and Source
+        run: |
+          cd sdk
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          
+          # 将源码放入 package 目录
+          cp -r ../mosdns package/
+          cp -r ../luci-app-mosdns package/
+
+      - name: Configure SDK
+        run: |
+          cd sdk
+          make defconfig
+          # 选中这两个包
+          echo "CONFIG_PACKAGE_mosdns=m" >> .config
+          echo "CONFIG_PACKAGE_luci-app-mosdns=m" >> .config
+          make defconfig
+
+      - name: Compile Packages
+        run: |
+          cd sdk
+          # 设置 Go 代理，防止下载依赖时超时
+          export GOPROXY=https://goproxy.cn,direct
+          export GOMODCACHE=$PWD/dl/go-mod
+          
+          # 编译核心和 UI
+          make package/mosdns/compile V=s
+          make package/luci-app-mosdns/compile V=s
+
+      - name: Collect IPKs
+        run: |
+          mkdir -p output
+          # 收集所有生成的 ipk 文件
+          find sdk/bin/packages/ -name "*.ipk" -exec cp {} output/ \;
+          find sdk/bin/targets/ -name "*.ipk" -exec cp {} output/ \;
+          ls -lh output/
+
+      - name: Upload IPKs
+        uses: actions/upload-artifact@v4
         with:
-          gh_token: ${{ secrets.GITHUB_TOKEN }}
-          delete_releases: true
-          releases_keep_latest: 0
-          delete_tags: true
-          delete_workflows: true
-          workflows_keep_day: 0
+          name: mosdns-mt7621-24.10.6-ipks
+          path: output/*.ipk
