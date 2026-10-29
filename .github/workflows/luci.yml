@@ -1,4 +1,4 @@
-name: Build MosDNS IPK (ImmortalWrt 24.10.6 MT7621)
+name: Build LuCI-App-MosDNS Only (Any Arch)
 
 on:
   workflow_dispatch: # 允许手动触发
@@ -13,17 +13,16 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          # 必须安装 zstd 以解压 24.10 版本的 SDK
+          # 安装编译 OpenWrt 包所需的基础工具
           sudo apt-get install -y build-essential clang flex bison g++ gawk \
-          gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
-          python3-distutils python3-setuptools rsync swig unzip zlib1g-dev file wget zstd
+          gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
+          python3-setuptools python3-dev rsync swig unzip zlib1g-dev file wget zstd
 
       - name: Download ImmortalWrt 24.10.6 SDK for MT7621
         run: |
-          # 官方 24.10.6 MT7621 SDK 链接 (.tar.zst 格式)
+          # 依然使用 SDK，因为 LuCI 的打包需要依赖 SDK 里的基础构建环境 (如 luci-base)
           SDK_URL="https://downloads.immortalwrt.org/releases/24.10.6/targets/ramips/mt7621/immortalwrt-sdk-24.10.6-ramips-mt7621_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           wget -O sdk.tar.zst "$SDK_URL"
-          # 使用 zstd 解压
           tar --use-compress-program=unzstd -xf sdk.tar.zst || tar --zstd -xf sdk.tar.zst
           mv immortalwrt-sdk-* sdk
 
@@ -33,40 +32,33 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           
-          # 将源码放入 package 目录
-          cp -r ../mosdns package/
+          # 核心修改：只复制 luci 前端目录，不复制 mosdns 核心目录
           cp -r ../luci-app-mosdns package/
 
       - name: Configure SDK
         run: |
           cd sdk
           make defconfig
-          # 选中这两个包
-          echo "CONFIG_PACKAGE_mosdns=m" >> .config
+          # 只选中 luci 前端进行编译
           echo "CONFIG_PACKAGE_luci-app-mosdns=m" >> .config
           make defconfig
 
-      - name: Compile Packages
+      - name: Compile LuCI Package Only
         run: |
           cd sdk
-          # 设置 Go 代理，防止下载依赖时超时
-          export GOPROXY=https://goproxy.cn,direct
-          export GOMODCACHE=$PWD/dl/go-mod
-          
-          # 编译核心和 UI
-          make package/mosdns/compile V=s
+          # 只编译前端，不需要设置 Go 代理，速度极快
           make package/luci-app-mosdns/compile V=s
 
-      - name: Collect IPKs
+      - name: Collect IPKs and APKs
         run: |
           mkdir -p output
-          # 收集所有生成的 ipk 文件
-          find sdk/bin/packages/ -name "*.ipk" -exec cp {} output/ \;
-          find sdk/bin/targets/ -name "*.ipk" -exec cp {} output/ \;
+          # 收集生成的 luci 前端包 (兼容 ipk 和 24.10 可能生成的 apk 格式)
+          find sdk/bin/packages/ -name "luci-app-mosdns*" -exec cp {} output/ \;
+          find sdk/bin/targets/ -name "luci-app-mosdns*" -exec cp {} output/ \;
           ls -lh output/
 
-      - name: Upload IPKs
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mosdns-mt7621-24.10.6-ipks
-          path: output/*.ipk
+          name: luci-app-mosdns-only
+          path: output/*
