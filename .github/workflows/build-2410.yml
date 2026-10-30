@@ -1,4 +1,4 @@
-name: Build MosDNS Full Suite (mipsel_24kc)
+name: Build MosDNS Full Suite (25.12 APK Format)
 
 on:
   workflow_dispatch: # 允许手动触发
@@ -18,9 +18,10 @@ jobs:
           gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
           python3-setuptools python3-dev rsync swig unzip zlib1g-dev file wget zstd
 
-      - name: Download ImmortalWrt 24.10.6 SDK (ramips/mt7621 -> mipsel_24kc)
+      - name: Download ImmortalWrt 25.12.2 SDK (ramips/mt7621 -> mipsel_24kc)
         run: |
-          SDK_URL="https://downloads.immortalwrt.org/releases/24.10.6/targets/ramips/mt7621/immortalwrt-sdk-24.10.6-ramips-mt7621_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+          # 使用 25.12.2 最新 SDK，GCC 升级到了 14.3.0
+          SDK_URL="https://downloads.immortalwrt.org/releases/25.12.2/targets/ramips/mt7621/immortalwrt-sdk-25.12.2-ramips-mt7621_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
           wget -O sdk.tar.zst "$SDK_URL"
           tar --use-compress-program=unzstd -xf sdk.tar.zst || tar --zstd -xf sdk.tar.zst
           mv immortalwrt-sdk-* sdk
@@ -52,23 +53,23 @@ jobs:
           export GOPROXY=https://goproxy.cn,direct
           export GOMODCACHE=$PWD/dl/go-mod
           
-          # 编译核心和 UI (SDK 会自动连带编译 zh-cn 语言包)
+          # 编译核心和 UI (25.12 SDK 会自动生成 .apk 格式)
           make package/mosdns/compile V=s
           make package/luci-app-mosdns/compile V=s
 
-      - name: Collect Target IPKs
+      - name: Collect Target APKs
         run: |
           mkdir -p output
-          # 精准匹配你需要的三个包 (兼容 .ipk 和 24.10 可能生成的 .apk 格式)
+          # 精准匹配你需要的三个包 (25.12 默认生成 .apk 格式)
           find sdk/bin/packages/ -type f \( -name "mosdns_*mipsel_24kc*" -o -name "luci-app-mosdns_*all*" -o -name "luci-i18n-mosdns-zh-cn_*all*" \) -exec cp {} output/ \;
           
-          # 兜底宽泛匹配，防止文件名格式微调导致漏抓
-          find sdk/bin/packages/ -type f \( -name "mosdns_*.ipk" -o -name "mosdns_*.apk" -o -name "luci-app-mosdns*.ipk" -o -name "luci-app-mosdns*.apk" -o -name "luci-i18n-mosdns*.ipk" -o -name "luci-i18n-mosdns*.apk" \) -exec cp {} output/ \;
+          # 兜底宽泛匹配，兼容 .apk 和可能残留的 .ipk
+          find sdk/bin/packages/ -type f \( -name "mosdns_*.apk" -o -name "luci-app-mosdns*.apk" -o -name "luci-i18n-mosdns*.apk" -o -name "mosdns_*.ipk" -o -name "luci-app-mosdns*.ipk" -o -name "luci-i18n-mosdns*.ipk" \) -exec cp {} output/ \;
           
           ls -lh output/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mosdns-full-suite-mipsel_24kc
+          name: mosdns-full-suite-25.12-apk
           path: output/*
