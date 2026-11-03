@@ -1,7 +1,7 @@
-name: Build MosDNS Full Suite (25.12 APK Format)
+name: Build MosDNS Full Suite (25.12 APK Format) - FIXED
 
 on:
-  workflow_dispatch: # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   build:
@@ -24,40 +24,48 @@ jobs:
           tar --use-compress-program=unzstd -xf sdk.tar.zst || tar --zstd -xf sdk.tar.zst
           mv immortalwrt-sdk-* sdk
 
-      - name: Prepare Feeds and Source
+      - name: Prepare Feeds and Source (🔥 CORE FIX)
         run: |
           cd sdk
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          # 核心修复 1：必须显式更新并安装 packages feed，否则找不到 golang-package.mk！
+          ./scripts/feeds update packages
+          ./scripts/feeds install -a -p packages
+          
+          # 复制源码
           cp -r ../mosdns package/
           cp -r ../luci-app-mosdns package/
 
       - name: Configure SDK
         run: |
           cd sdk
-          # 核心修复 1：强制启用 golang 支持，这是编译 mosdns 的前提！
-          echo "CONFIG_PACKAGE_golang=y" >> .config
+          make defconfig
+          # 选中这三个包
           echo "CONFIG_PACKAGE_mosdns=m" >> .config
           echo "CONFIG_PACKAGE_luci-app-mosdns=m" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-mosdns-zh-cn=m" >> .config
+          # 强制启用 golang 支持
+          echo "CONFIG_PACKAGE_golang=y" >> .config
           make defconfig
 
-      - name: Compile Packages
+      - name: Compile Packages (🔥 CORE FIX)
         run: |
           cd sdk
-          # 核心修复 2：加入 set -e，任何一行报错立刻停止，防止错误被掩盖！
-          set -e 
+          # 核心修复 2：加入 set -e，任何一步失败立刻标红报错，绝不掩盖！
+          set -e
           
           export GOPROXY=https://goproxy.cn,direct
           export GOMODCACHE=$PWD/dl/go-mod
           
-          # 核心修复 3：先下载源码和依赖，防止编译时网络超时
+          # 核心修复 3：必须【先】单独编译 golang 宿主环境！这是 mosdns 编译的物理前提！
+          make package/golang/host/compile V=s
+          
+          # 下载 mosdns 源码
           make package/mosdns/download V=s
           
-          # 编译核心
+          # 编译 mosdns 核心
           make package/mosdns/compile V=s
           
-          # 编译 UI
+          # 编译 luci 前端
           make package/luci-app-mosdns/compile V=s
 
       - name: Collect Target APKs
