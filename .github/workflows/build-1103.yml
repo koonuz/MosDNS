@@ -24,18 +24,21 @@ jobs:
           tar --use-compress-program=unzstd -xf sdk.tar.zst || tar --zstd -xf sdk.tar.zst
           mv immortalwrt-sdk-* sdk
 
-      - name: Prepare Feeds and Source (🔥 最终修复：更新所有 Feed)
+      - name: Prepare Feeds and Source (🔥 解决包名冲突)
         run: |
           cd sdk
-          # 核心修复：使用 -a 更新并安装所有 feed！
-          # 这样既包含了 golang-package.mk (来自 packages)，也包含了 luci.mk (来自 luci)
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           
-          # 复制源码
+          # 核心修复：强行删除官方 feed 里自带的旧版本 (5.3.3)，防止包名冲突！
+          rm -rf package/feeds/packages/mosdns
+          rm -rf package/feeds/luci/applications/luci-app-mosdns
+          rm -rf package/feeds/luci/i18n/mosdns
+          
+          # 复制你的自定义包 (5.3.4)
           cp -r ../mosdns package/
           cp -r ../luci-app-mosdns package/
-
+  
       - name: Configure SDK
         run: |
           cd sdk
