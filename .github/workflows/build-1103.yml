@@ -1,4 +1,4 @@
-name: Build MosDNS Full Suite (25.12 APK Format) - FIXED
+name: Build MosDNS Full Suite (25.12 APK Format) - FINAL
 
 on:
   workflow_dispatch:
@@ -24,12 +24,13 @@ jobs:
           tar --use-compress-program=unzstd -xf sdk.tar.zst || tar --zstd -xf sdk.tar.zst
           mv immortalwrt-sdk-* sdk
 
-      - name: Prepare Feeds and Source (🔥 CORE FIX)
+      - name: Prepare Feeds and Source (🔥 最终修复：更新所有 Feed)
         run: |
           cd sdk
-          # 核心修复 1：必须显式更新并安装 packages feed，否则找不到 golang-package.mk！
-          ./scripts/feeds update packages
-          ./scripts/feeds install -a -p packages
+          # 核心修复：使用 -a 更新并安装所有 feed！
+          # 这样既包含了 golang-package.mk (来自 packages)，也包含了 luci.mk (来自 luci)
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
           
           # 复制源码
           cp -r ../mosdns package/
@@ -47,25 +48,25 @@ jobs:
           echo "CONFIG_PACKAGE_golang=y" >> .config
           make defconfig
 
-      - name: Compile Packages (🔥 CORE FIX)
+      - name: Compile Packages (🔥 保持严格模式)
         run: |
           cd sdk
-          # 核心修复 2：加入 set -e，任何一步失败立刻标红报错，绝不掩盖！
+          # 保持 set -e，任何报错立刻标红
           set -e
           
           export GOPROXY=https://goproxy.cn,direct
           export GOMODCACHE=$PWD/dl/go-mod
           
-          # 核心修复 3：必须【先】单独编译 golang 宿主环境！这是 mosdns 编译的物理前提！
+          # 1. 必须先编译好宿主机的 Go 环境
           make package/golang/host/compile V=s
           
-          # 下载 mosdns 源码
+          # 2. 下载 mosdns 源码
           make package/mosdns/download V=s
           
-          # 编译 mosdns 核心
+          # 3. 编译 mosdns 核心
           make package/mosdns/compile V=s
           
-          # 编译 luci 前端
+          # 4. 编译 luci 前端
           make package/luci-app-mosdns/compile V=s
 
       - name: Collect Target APKs
@@ -78,5 +79,5 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mosdns-full-suite-25.12-apk
+          name: mosdns-full-suite-25.12-apk-final
           path: output/*
