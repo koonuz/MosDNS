@@ -69,16 +69,15 @@ jobs:
           # 4. 编译 luci 前端
           make package/luci-app-mosdns/compile V=s
 
-      - name: Collect Target APKs (🔥 暴力收集所有 APK)
+      - name: Collect Target APKs (🔥 精准提取三个核心包)
         run: |
           mkdir -p output
           
-          # 25.12 的 apk 命名规则是横杠 (-) 而不是下划线 (_)！
-          # 我们不再精准匹配，直接暴力抓取 bin/packages 和 bin/targets 目录下所有的 .apk 文件！
-          find sdk/bin/packages/ -type f -name "*.apk" -exec cp {} output/ \;
-          find sdk/bin/targets/ -type f -name "*.apk" -exec cp {} output/ \;
+          # 25.12 的 apk 命名规则是横杠 (-)！
+          # 精准匹配这三个包，不再收集其他依赖包
+          find sdk/bin/packages/ -type f \( -name "mosdns-*.apk" -o -name "luci-app-mosdns-*.apk" -o -name "luci-i18n-mosdns-zh-cn-*.apk" \) -exec cp {} output/ \;
           
-          # 打印出来看看究竟生成了哪些文件
+          # 打印出来看看究竟收集到了什么
           echo "=== 成功收集的 APK 文件列表 ==="
           ls -lh output/
 
