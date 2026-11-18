@@ -87,9 +87,7 @@ function get_adlist() {
 		let url = ad_source[i];
 		if (!url) continue;
 
-		if (url === 'geosite.dat') {
-			push(adlist, '/var/mosdns/geosite_category-ads-all.txt');
-		} else if (index(url, 'file://') === 0) {
+		if (index(url, 'file://') === 0) {
 			push(adlist, substr(url, 7));
 		} else {
 			let parts = split(url, '/');
@@ -135,7 +133,7 @@ function update_adlist() {
 		let url = ad_source[i];
 		if (!url) continue;
 
-		if (url !== 'geosite.dat' && index(url, 'file://') !== 0) {
+		if (index(url, 'file://') !== 0) {
 			has_update = true;
 			exec_sys(`echo "${url}" >> /etc/mosdns/rule/.ad_source`);
 
@@ -172,146 +170,6 @@ function update_adlist() {
 	return has_update;
 }
 
-function update_geodat() {
-	let uci_cursor = cursor();
-	uci_cursor.load('mosdns');
-
-	let github_proxy = uci_cursor.get('mosdns', 'config', 'github_proxy') || '';
-	let mirror = github_proxy ? github_proxy + '/' : '';
-	let geoip_type = uci_cursor.get('mosdns', 'config', 'geoip_type') || 'geoip-only-cn-private';
-	let v2dat_dir = '/usr/share/v2ray';
-
-	let tmp_res = exec_sys('mktemp -d');
-	if (tmp_res.code !== 0) die("Failed to create temp directory for geodata.");
-	let tmpdir = tmp_res.stdout;
-
-	exec_sys(`mkdir -p "${v2dat_dir}"`);
-
-	let geoip_updated = false;
-	let geoip_url = mirror + "https://github.com/Loyalsoldier/geoip/releases/latest/download/" + geoip_type + ".dat";
-
-	print(`Downloading ${geoip_url}.sha256sum\n`);
-	stdout.flush();
-	if (exec_sys(`wget -4 -q --no-check-certificate -T 20 -O "${tmpdir}/geoip.dat.sha256sum" "${geoip_url}.sha256sum"`).code !== 0) {
-		exec_sys(`rm -rf "${tmpdir}"`);
-		die("Failed to download geoip.dat.sha256sum");
-	}
-
-	let geoip_sum_remote = split(exec_sys(`cat "${tmpdir}/geoip.dat.sha256sum"`).stdout, /[ \t\n]+/)[0];
-	let geoip_sum_local = "";
-	if (stat(`${v2dat_dir}/geoip.dat`)) {
-		geoip_sum_local = split(exec_sys(`sha256sum "${v2dat_dir}/geoip.dat"`).stdout, /[ \t\n]+/)[0];
-	}
-
-	if (geoip_sum_local === geoip_sum_remote) {
-		print("geoip.dat is up to date.\n");
-		stdout.flush();
-	} else {
-		print(`Downloading ${geoip_url}\n`);
-		stdout.flush();
-		if (exec_sys(`wget -4 -q --no-check-certificate -T 120 -O "${tmpdir}/geoip.dat" "${geoip_url}"`).code !== 0) {
-			exec_sys(`rm -rf "${tmpdir}"`);
-			die("Failed to download geoip.dat");
-		}
-
-		let sum_downloaded = split(exec_sys(`sha256sum "${tmpdir}/geoip.dat"`).stdout, /[ \t\n]+/)[0];
-		if (sum_downloaded !== geoip_sum_remote) {
-			exec_sys(`rm -rf "${tmpdir}"`);
-			die("geoip.dat checksum error");
-		}
-		geoip_updated = true;
-	}
-
-	let geosite_updated = false;
-	let geosite_url = mirror + "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat";
-
-	print(`Downloading ${geosite_url}.sha256sum\n`);
-	stdout.flush();
-	if (exec_sys(`wget -4 -q --no-check-certificate -T 20 -O "${tmpdir}/geosite.dat.sha256sum" "${geosite_url}.sha256sum"`).code !== 0) {
-		exec_sys(`rm -rf "${tmpdir}"`);
-		die("Failed to download geosite.dat.sha256sum");
-	}
-
-	let geosite_sum_remote = split(exec_sys(`cat "${tmpdir}/geosite.dat.sha256sum"`).stdout, /[ \t\n]+/)[0];
-	let geosite_sum_local = "";
-	if (stat(`${v2dat_dir}/geosite.dat`)) {
-		geosite_sum_local = split(exec_sys(`sha256sum "${v2dat_dir}/geosite.dat"`).stdout, /[ \t\n]+/)[0];
-	}
-
-	if (geosite_sum_local === geosite_sum_remote) {
-		print("geosite.dat is up to date.\n");
-		stdout.flush();
-	} else {
-		print(`Downloading ${geosite_url}\n`);
-		stdout.flush();
-		if (exec_sys(`wget -4 -q --no-check-certificate -T 120 -O "${tmpdir}/geosite.dat" "${geosite_url}"`).code !== 0) {
-			exec_sys(`rm -rf "${tmpdir}"`);
-			die("Failed to download geosite.dat");
-		}
-
-		let sum_downloaded = split(exec_sys(`sha256sum "${tmpdir}/geosite.dat"`).stdout, /[ \t\n]+/)[0];
-		if (sum_downloaded !== geosite_sum_remote) {
-			exec_sys(`rm -rf "${tmpdir}"`);
-			die("geosite.dat checksum error");
-		}
-		geosite_updated = true;
-	}
-
-	if (geoip_updated) {
-		exec_sys(`cp -a "${tmpdir}/geoip.dat" "${v2dat_dir}/"`);
-	}
-
-	if (geosite_updated) {
-		exec_sys(`cp -a "${tmpdir}/geosite.dat" "${v2dat_dir}/"`);
-	}
-
-	exec_sys(`rm -rf "${tmpdir}"`);
-}
-
-function v2dat_dump() {
-	let uci_cursor = cursor();
-	uci_cursor.load('mosdns');
-	let v2dat_dir = '/usr/share/v2ray';
-	let configfile = uci_cursor.get('mosdns', 'config', 'configfile') || '/var/etc/mosdns.json';
-	let adblock = uci_cursor.get('mosdns', 'config', 'adblock');
-	let ad_source = uci_cursor.get('mosdns', 'config', 'ad_source') || "";
-	let streaming_media = uci_cursor.get('mosdns', 'config', 'custom_stream_media_dns');
-
-	mkdir('/var/mosdns', 0755);
-	exec_sys('rm -f /var/mosdns/geo*.txt');
-
-	if (configfile === "/var/etc/mosdns.json") {
-		exec_sys(`geo2txt geoip -f ${v2dat_dir}/geoip.dat -e cn -o /var/mosdns`);
-		exec_sys(`geo2txt geosite -f ${v2dat_dir}/geosite.dat -e cn -e apple -e 'geolocation-!cn' -o /var/mosdns`);
-
-		if (adblock === '1' && index(ad_source, 'geosite.dat') !== -1) {
-			exec_sys(`geo2txt geosite -f ${v2dat_dir}/geosite.dat -e category-ads-all -o /var/mosdns`);
-		}
-
-		if (streaming_media === '1') {
-			exec_sys(`geo2txt geosite -f ${v2dat_dir}/geosite.dat -e netflix -e disney -e hulu -o /var/mosdns`);
-		} else {
-			writefile('/var/mosdns/geosite_disney.txt', '');
-			writefile('/var/mosdns/geosite_netflix.txt', '');
-			writefile('/var/mosdns/geosite_hulu.txt', '');
-		}
-	} else {
-		exec_sys(`geo2txt geoip -f ${v2dat_dir}/geoip.dat -e cn -o /var/mosdns`);
-		exec_sys(`geo2txt geosite -f ${v2dat_dir}/geosite.dat -e cn -e 'geolocation-!cn' -o /var/mosdns`);
-
-		let geoip_tags = to_array(uci_cursor.get('mosdns', 'config', 'geoip_tags'));
-		if (length(geoip_tags) > 0) {
-			let tags_str = "-e '" + join("' -e '", geoip_tags) + "'";
-			exec_sys(`geo2txt geoip -f ${v2dat_dir}/geoip.dat ${tags_str} -o /var/mosdns`);
-		}
-
-		let geosite_tags = to_array(uci_cursor.get('mosdns', 'config', 'geosite_tags'));
-		if (length(geosite_tags) > 0) {
-			let tags_str = "-e '" + join("' -e '", geosite_tags) + "'";
-			exec_sys(`geo2txt geosite -f ${v2dat_dir}/geosite.dat ${tags_str} -o /var/mosdns`);
-		}
-	}
-}
 
 let action = ARGV[0];
 

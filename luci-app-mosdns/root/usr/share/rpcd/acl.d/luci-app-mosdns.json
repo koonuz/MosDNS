@@ -40,7 +40,6 @@
 				"/etc/mosdns/config_custom.yaml": [ "write" ],
 				"/etc/mosdns/rule/*": [ "write" ],
 				"/usr/share/mosdns/*": [ "write" ],
-				"/usr/share/v2ray/*": [ "write" ],
 				"/var/log/*": [ "write" ],
 				"/var/mosdns/*": [ "write" ]
 			},
