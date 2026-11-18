@@ -17,27 +17,6 @@ plugins:
       dump_file: "/etc/mosdns/stats.dump" # 数据持久化转存文件路径，不设置则不转存
       dump_interval: 600                  # 周期性转储间隔（秒）
 
-  # 国内域名
-  - tag: geosite_cn
-    type: domain_set
-    args:
-      files:
-        - "/var/mosdns/geosite_cn.txt"
-
-  # 国内 IP
-  - tag: geoip_cn
-    type: ip_set
-    args:
-      files:
-        - "/var/mosdns/geoip_cn.txt"
-
-  # 国外域名
-  - tag: geosite_no_cn
-    type: domain_set
-    args:
-      files:
-        - "/var/mosdns/geosite_geolocation-!cn.txt"
-
   # 缓存
   - tag: lazy_cache
     type: cache
@@ -84,43 +63,10 @@ plugins:
       - matches: has_resp
         exec: accept
 
-  # fallback 用本地服务器 sequence
-  # 返回非国内 ip 则 drop_resp
-  - tag: query_is_local_ip
-    type: sequence
-    args:
-      - exec: $local_sequence
-      - matches: "!resp_ip $geoip_cn"
-        exec: drop_resp
-
-  # fallback 用远程服务器 sequence
-  - tag: query_is_remote
-    type: sequence
-    args:
-      - exec: $remote_sequence
-
-  # fallback 用远程服务器 sequence
-  - tag: fallback
-    type: fallback
-    args:
-      primary: query_is_local_ip
-      secondary: query_is_remote
-      threshold: 500
-      always_standby: true
-
-  # 查询国内域名
-  - tag: query_is_local_domain
-    type: sequence
-    args:
-      - matches: qname $geosite_cn
-        exec: $local_sequence
-
-  # 查询国外域名
-  - tag: query_is_no_local_domain
-    type: sequence
-    args:
-      - matches: qname $geosite_no_cn
-        exec: $remote_sequence
+  # 分流示例：不再依赖 geosite/geoip 数据文件。
+  # 如需按域名/IP 分流，请在 /etc/mosdns/rule/ 下放置纯文本规则文件，
+  # 用 domain_set / ip_set 插件引用它们（文件不存在会导致 mosdns 启动失败）。
+  # 下方保留 forward_remote / remote_sequence 作为扩展分流时的现成积木。
 
   # 主要的运行逻辑插件
   # sequence 插件中调用的插件 tag 必须在 sequence 前定义，
@@ -131,11 +77,7 @@ plugins:
       - exec: $stats_collector           # 执行全局统计控制器
       - exec: $lazy_cache
       - exec: jump has_resp_sequence
-      - exec: $query_is_local_domain
-      - exec: jump has_resp_sequence
-      - exec: $query_is_no_local_domain
-      - exec: jump has_resp_sequence
-      - exec: $fallback
+      - exec: $local_sequence
 
   # 启动 udp 服务器。
   - tag: udp_server
