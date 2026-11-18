@@ -136,7 +136,6 @@ return view.extend({
 		s.tab('advanced', _('Advanced Options'));
 		s.tab('cloudflare', _('Cloudflare Options'));
 		s.tab('api', _('API Options'));
-		s.tab('geodata', _('GeoData Export'));
 
 		/* basic */
 		o = s.taboption('basic', form.Flag, 'enabled', _('Enabled'));
@@ -144,9 +143,8 @@ return view.extend({
 		o.rmempty = false;
 
 		o = s.taboption('basic', form.ListValue, 'configfile', _('Config File'));
-		o.value('/var/etc/mosdns.json', _('Default Config'));
 		o.value('/etc/mosdns/config_custom.yaml', _('Custom Config'));
-		o.default = '/var/etc/mosdns.json';
+		o.default = '/etc/mosdns/config_custom.yaml';
 		o.rmempty = false;
 
 		o = s.taboption('basic', form.Value, 'listen_port', _('Listen Port'));
@@ -378,8 +376,9 @@ return view.extend({
 		o.default = 0;
 		o.depends('configfile', '/var/etc/mosdns.json');
 
-		o = s.taboption('advanced', form.Flag, 'adblock', _('Enable DNS ADblock'));
-		o.depends('configfile', '/var/etc/mosdns.json');
+		o = s.taboption('advanced', form.Flag, 'adblock', _('Enable DNS ADblock'),
+			_('Download rule sources into /etc/mosdns/rule/ for your custom config to reference.'));
+		o.depends('configfile', '/etc/mosdns/config_custom.yaml');
 		o.default = false;
 
 		o = s.taboption('advanced', form.DynamicList, 'ad_source', _('ADblock Source'),
@@ -387,11 +386,17 @@ return view.extend({
 			'<br>' +
 			_('Support for local files, such as: file:///var/mosdns/example.txt'));
 		o.depends('adblock', '1');
-		o.default = 'geosite.dat';
-		o.value('geosite.dat', 'v2ray-geosite');
+		o.default = 'https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/master/anti-ad-domains.txt';
 		o.value('https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/master/anti-ad-domains.txt', 'anti-AD');
 		o.value('https://raw.githubusercontent.com/Cats-Team/AdRules/main/mosdns_adrules.txt', 'Cats-Team/AdRules');
 		o.value('https://raw.githubusercontent.com/neodevpro/neodevhost/master/domain', 'NEO DEV HOST');
+
+		o = s.taboption('advanced', form.Value, 'github_proxy', _('GitHub Proxy'),
+			_('Update rule files with GitHub Proxy, leave blank to disable proxy downloads.'));
+		o.value('https://gh-proxy.com', _('https://gh-proxy.com'));
+		o.rmempty = true;
+		o.default = '';
+		o.depends('adblock', '1');
 
 		/* cloudflare */
 		o = s.taboption('cloudflare', form.Flag, 'cloudflare', _('Enabled'),
@@ -495,16 +500,6 @@ return view.extend({
 					});
 			}
 		};
-
-		o = s.taboption('geodata', form.DynamicList, 'geosite_tags', _('GeoSite Tags'),
-			_('Enter the GeoSite.dat category to be exported, Allow add multiple tags'),
-			_('Export directory: /var/mosdns'));
-		o.depends('configfile', '/etc/mosdns/config_custom.yaml');
-
-		o = s.taboption('geodata', form.DynamicList, 'geoip_tags', _('GeoIP Tags'),
-			_('Enter the GeoIP.dat category to be exported, Allow add multiple tags'),
-			_('Export directory: /var/mosdns'));
-		o.depends('configfile', '/etc/mosdns/config_custom.yaml');
 
 		return m.render();
 	}

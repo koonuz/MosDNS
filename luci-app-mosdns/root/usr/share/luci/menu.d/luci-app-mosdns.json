@@ -26,14 +26,6 @@
 			"path": "mosdns/rules"
 		}
 	},
-	"admin/services/mosdns/update": {
-		"title": "Geodata Update",
-		"order": 20,
-		"action": {
-			"type": "view",
-			"path": "mosdns/update"
-		}
-	},
 	"admin/services/mosdns/statistics": {
 		"title": "Statistics",
 		"order": 25,
