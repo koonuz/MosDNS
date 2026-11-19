@@ -77,7 +77,27 @@ jobs:
           echo "CONFIG_PACKAGE_luci-app-mosdns=m" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-mosdns-zh-cn=m" >> .config
           echo "CONFIG_PACKAGE_golang=y" >> .config
+          # 只编软件包不编镜像：目标默认包里的 u-boot 全部显式排除。
+          # uboot-mediatek 的 prereq（include/u-boot.mk）会连跑 python3-dev/
+          # setuptools/swig 一串宿主检查，与我们要编的包毫无关系
+          sed -i 's/^CONFIG_PACKAGE_uboot-\([^=]*\)=y/# CONFIG_PACKAGE_uboot-\1 is not set/' .config
           make defconfig
+          grep -c 'CONFIG_PACKAGE_uboot-.*=y' .config || echo "uboot 已全部排除"
+
+      - name: Patch host python setuptools
+        run: |
+          # u-boot.mk 的 setuptools 检查跑的是 SDK 宿主 python（staging_dir/host/bin/
+          # python3，来自缓存），apt 装的 setuptools 只对系统 python 生效，这里单独补
+          HPY=sdk/staging_dir/host/bin/python3
+          if [ -x "$HPY" ]; then
+            if ! "$HPY" -c 'import setuptools' 2>/dev/null; then
+              SP="$("$HPY" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])' 2>/dev/null || true)"
+              [ -n "$SP" ] && python3 -m pip install -q --target "$SP" setuptools || true
+            fi
+            "$HPY" -c 'import setuptools' && echo "host python setuptools OK" || echo "host python 缺失或不可用，若 prereq 因此失败再处理"
+          else
+            echo "staging_dir/host/bin/python3 不存在（缓存未带 host python）"
+          fi
 
       - name: Compile core packages (mosdns + luci-app)
         run: |
