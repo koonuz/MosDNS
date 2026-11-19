@@ -83,14 +83,9 @@ jobs:
           [ "${{ inputs.debug }}" = "true" ] && VFLAG="V=s"
           make -j$(nproc) $VFLAG package/mosdns/compile package/luci-app-mosdns/compile
 
-      # 独立步骤 + V=s：失败不阻塞 job（保证缓存保存与核心 apk 交付），
-      # 且这一步的日志短、错误信息完整，方便定位
-      - name: Compile i18n (zh-cn, verbose, non-blocking)
-        continue-on-error: true
-        run: |
-          cd sdk
-          make -j1 V=s package/luci-i18n-mosdns-zh-cn/compile
-
+      # luci-i18n-mosdns-zh-cn 是 luci.mk 在本目录生成的子包，没有独立的
+      # package/<name>/compile target；只要 .config 中选中（见 Configure SDK），
+      # 它会在上面的 luci-app-mosdns 编译时一并出包
       - name: Collect APKs
         run: |
           mkdir -p output
