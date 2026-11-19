@@ -44,10 +44,13 @@ jobs:
 
       - name: Download and extract SDK
         run: |
+          # 缓存恢复可能已预创建 sdk/（装着 dl/staging_dir 等），必须合并而非改名
+          mkdir -p sdk
           wget -q -O sdk.tar.zst "$SDK_URL"
           tar --use-compress-program=unzstd -xf sdk.tar.zst
-          # 整目录改名（不能用通配符移动内容，会丢失 .config 等隐藏文件）
-          mv immortalwrt-sdk-* sdk
+          rsync -a immortalwrt-sdk-*/ sdk/
+          rm -rf immortalwrt-sdk-*
+          ls sdk/scripts/feeds sdk/.config >/dev/null && echo "SDK 就绪"
 
       - name: Prepare feeds and copy packages
         run: |
