@@ -50,7 +50,8 @@ jobs:
           tar --use-compress-program=unzstd -xf sdk.tar.zst
           rsync -a immortalwrt-sdk-*/ sdk/
           rm -rf immortalwrt-sdk-*
-          ls sdk/scripts/feeds sdk/.config >/dev/null && echo "SDK 就绪"
+          # SDK 压缩包不带 .config（由下一步的 make defconfig 现场生成），只查关键脚本
+          ls sdk/scripts/feeds sdk/include/toplevel.mk >/dev/null && echo "SDK 就绪"
 
       - name: Prepare feeds and copy packages
         run: |
