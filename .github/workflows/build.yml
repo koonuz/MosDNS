@@ -78,14 +78,19 @@ jobs:
       - name: Compile
         run: |
           cd sdk
-          set -e
           export GOMODCACHE=$PWD/dl/go-mod
           VFLAG=""
           [ "${{ inputs.debug }}" = "true" ] && VFLAG="V=s"
-          make -j$(nproc) $VFLAG \
-            package/mosdns/compile \
-            package/luci-app-mosdns/compile \
-            package/luci-i18n-mosdns-zh-cn/compile
+          TARGETS="package/mosdns/compile package/luci-app-mosdns/compile package/luci-i18n-mosdns-zh-cn/compile"
+          set +e
+          make -j$(nproc) $VFLAG $TARGETS
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::warning::parallel build failed (rc=$rc), retrying serially with V=s to locate the error"
+            set -e
+            # 已完成的包有 stamp 会秒过；失败的那个会以详细模式重新暴露错误
+            make -j1 V=s $TARGETS
+          fi
 
       - name: Collect APKs
         run: |
