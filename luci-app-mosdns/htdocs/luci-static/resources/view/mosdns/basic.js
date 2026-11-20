@@ -142,6 +142,22 @@ return view.extend({
 		o.default = o.disabled;
 		o.rmempty = false;
 
+		o = s.taboption('basic', form.Button, '_restart_btn', _('Restart service'),
+			_('mosdns v5 requires a service restart to apply configuration changes.'));
+		o.inputtitle = _('Restart MosDNS');
+		o.inputstyle = 'negative';
+		o.write = function() {};
+		o.remove = function() {};
+		o.onclick = function(ev, section_id) {
+			return fs.exec('/etc/init.d/mosdns', ['restart'])
+				.then(() => {
+					ui.addNotification(null, E('p', _('mosdns has been restarted, the new configuration is now active.')), 'info');
+				})
+				.catch(e => {
+					ui.addNotification(null, E('p', _('Failed to restart: %s').format(e.message)), 'error');
+				});
+		};
+
 		o = s.taboption('basic', form.ListValue, 'configfile', _('Config File'));
 		o.value('/etc/mosdns/config_custom.yaml', _('Custom Config'));
 		o.default = '/etc/mosdns/config_custom.yaml';

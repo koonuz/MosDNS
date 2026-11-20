@@ -1126,3 +1126,18 @@ msgstr "● 实时刷新"
 #: luci-app-mosdns/htdocs/luci-static/resources/view/mosdns/statistics.js:237
 msgid "❚❚ Paused (Page %d)"
 msgstr "❚❚ 暂停 (第 %d 页)"
+
+msgid "Restart service"
+msgstr "重启服务"
+
+msgid "Restart MosDNS"
+msgstr "重启 MosDNS"
+
+msgid "mosdns v5 requires a service restart to apply configuration changes."
+msgstr "mosdns v5 修改配置后需重启服务才能加载新配置"
+
+msgid "mosdns has been restarted, the new configuration is now active."
+msgstr "mosdns 已重启，新配置已生效"
+
+msgid "Failed to restart: %s"
+msgstr "重启失败: %s"
