@@ -76,27 +76,11 @@ const callMosdns = rpc.declare({
 	expect: { '': {} }
 });
 
-const callFlushCache = rpc.declare({
-	object: 'luci.mosdns',
-	method: 'flush_cache',
-	expect: { '': {} }
-});
-
 return view.extend({
 	load() {
 		return Promise.all([
 			L.resolveDefault(callMosdns(), null),
 		]);
-	},
-
-	handleFlushCache() {
-		return callFlushCache().then(res => {
-			if (res.success) {
-				ui.addNotification(null, E('p', _('Flushing DNS Cache Success.')), 'info');
-			} else {
-				ui.addNotification(null, E('p', _('Flushing DNS Cache Failed, Please check if MosDNS is running.') + (res.error ? ': ' + res.error : '')), 'error');
-			}
-		});
 	},
 
 	render(data) {
@@ -134,8 +118,6 @@ return view.extend({
 
 		s.tab('basic', _('Basic Options'));
 		s.tab('advanced', _('Advanced Options'));
-		s.tab('cloudflare', _('Cloudflare Options'));
-		s.tab('api', _('API Options'));
 
 		/* basic */
 		o = s.taboption('basic', form.Flag, 'enabled', _('Enabled'));
@@ -413,70 +395,6 @@ return view.extend({
 		o.rmempty = true;
 		o.default = '';
 		o.depends('adblock', '1');
-
-		/* cloudflare */
-		o = s.taboption('cloudflare', form.Flag, 'cloudflare', _('Enabled'),
-			_('Match the parsing result with the Cloudflare IP ranges, and when there is a successful match, \
-				use the \'Custom IP\' as the parsing result (experimental feature)'));
-		o.rmempty = false;
-		o.default = false;
-		o.depends('configfile', '/var/etc/mosdns.json');
-
-		o = s.taboption('cloudflare', form.DynamicList, 'cloudflare_ip', _('Custom IP'));
-		o.datatype = 'ipaddr';
-		o.depends('configfile', '/var/etc/mosdns.json');
-
-		o = s.taboption('cloudflare', form.TextValue, '_cloudflare',
-			_('Cloudflare IP Ranges'),
-			_('IPv4 CIDR: <a href="https://www.cloudflare.com/ips-v4" target="_blank">https://www.cloudflare.com/ips-v4</a> <br /> IPv6 CIDR: <a href="https://www.cloudflare.com/ips-v6" target="_blank">https://www.cloudflare.com/ips-v6</a>'));
-		o.rows = 15;
-		o.depends('configfile', '/var/etc/mosdns.json');
-		o.cfgvalue = section_id => fs.trimmed('/etc/mosdns/rule/cloudflare-cidr.txt');
-		o.write = function(section_id, formvalue) {
-			return this.cfgvalue(section_id).then(value => {
-				if (value === formvalue) {
-					return;
-				}
-				return fs.write('/etc/mosdns/rule/cloudflare-cidr.txt', formvalue.trim().replace(/\r\n/g, '\n') + '\n');
-			});
-		};
-
-		/* api */
-		o = s.taboption('api', form.Value, 'listen_port_api', _('API Listen port'));
-		o.datatype = 'and(port,min(1))';
-		o.default = 52001;
-		o.depends('configfile', '/var/etc/mosdns.json');
-
-		o = s.taboption('api', form.Flag, 'stats_collector', _('Enable Stats Collector'));
-		o.rmempty = false;
-		o.default = o.enabled;
-		o.depends('configfile', '/var/etc/mosdns.json');
-
-		o = s.taboption('api', form.Value, 'stats_capacity', _('Ring Buffer Capacity'),
-			_('Query log ring buffer capacity (FIFO overwrite, default 2000, larger values consume more memory)'));
-		o.datatype = 'and(uinteger,min(1))';
-		o.default = 2000;
-		o.depends('stats_collector', '1');
-
-		o = s.taboption('api', form.Flag, 'stats_dump_file', _('Stats Dump'),
-			_('Save query statistics and logs locally and reload on next startup.'));
-		o.rmempty = false;
-		o.default = false;
-		o.depends('stats_collector', '1');
-
-		o = s.taboption('api', form.Value, 'stats_dump_interval',
-			_('Auto Save Stats Interval'));
-		o.datatype = 'and(uinteger,min(1))';
-		o.default = 600;
-		o.depends('stats_dump_file', '1');
-
-		o = s.taboption('api', form.Button, '_flush_cache', null,
-			_('Flushing DNS Cache will clear any IP addresses or DNS records from MosDNS cache.'));
-		o.title = '&#160;';
-		o.inputtitle = _('Flush DNS Cache');
-		o.inputstyle = 'apply';
-		o.onclick = L.bind(this.handleFlushCache, this);
-		o.depends('cache', '1');
 
 		/* configuration */
 		let configeditor = null;
